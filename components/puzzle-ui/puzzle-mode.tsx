@@ -25,16 +25,17 @@ const NoPuzzles = (
     <div className='flex flex-col max-w-5xl w-full items-stretch gap-8'>
       <div className='space-y-2'>
         <h1 className='scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl text-center'>
-          No Puzzles
+          No Puzzle Available
         </h1>
         <p className='text-xl text-muted-foreground text-center'>
           <br />
-          Wow, we have no puzzles left for you!
+          We couldn&apos;t find a puzzle matching your rating and selected theme
+          group.
           <br />
-          We can&apos;t find a puzzle that matches your rating and selected
-          theme group.
+          If this is a new installation, the puzzle library may not be imported
+          yet.
           <br />
-          Head back to the dashboard, and try again later.
+          Head back to the dashboard and try another theme.
         </p>
       </div>
     </div>

@@ -18,6 +18,8 @@
 *.db
 *.db-shm
 *.db-wal
+*.csv
+*.csv.zst
 
 # misc
 .DS_Store

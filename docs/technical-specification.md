@@ -20,7 +20,7 @@ Lychee is a web app for personalized chess puzzles. The README describes the goa
 - `components/`: shared UI, authentication controls, puzzle board/controls, and Woodpecker UI.
 - `lib/`: database connection/schema initialization (`db.ts`), Drizzle table definitions (`schema.ts`), typed SQL repository functions (`store.ts`), auth, and shared utilities.
 - `src/`: rating calculations, puzzle similarity, spaced repetition, and Leitner review logic.
-- `scripts/`: database initialization and one-time MongoDB-to-libSQL data import.
+- `scripts/`: database initialization plus Lichess CSV and one-time MongoDB imports.
 - `test/`: Jest unit tests for SM-2, similarity, and Glicko rating calculations.
 
 ## Main flows
@@ -52,13 +52,17 @@ Drizzle table definitions are in `lib/schema.ts`; typed read/write operations ar
 - `Similarity`: cached puzzle similarity results.
 - `Puzzles` and `PuzzleThemes`: puzzle data plus one indexed row per puzzle/theme.
 
-`dbConnect()` creates the tables and indexes idempotently on first use. `npm run db:init` initializes them explicitly. `npm run db:import-mongo` streams the old MongoDB collections, including `testPuzzles`, into an empty target database in batches. It maps existing Lucia session IDs to hashed session tokens so unexpired `auth_session` cookies can remain valid. The importer requires explicit source URI and database-name settings. If an import is interrupted, `npm run db:import-mongo -- --resume` can continue it before the app starts writing to the destination.
+`dbConnect()` creates the tables and indexes idempotently on first use. `npm run db:init` initializes them explicitly. A fresh database needs a puzzle corpus:
+
+- `npm run db:import-lichess -- ./lichess_db_puzzle.csv --limit 25000` imports a starter subset from the official, decompressed Lichess CSV. Use `--all` for the full file. Since the official CSV has no Lychee `hierarchy_tags`, it uses the theme list as a flat similarity signature.
+- `npm run db:import-mongo` streams the previous MongoDB collections, including `testPuzzles`, into an empty target database in batches. It maps old Lucia session IDs to hashed session tokens so unexpired `auth_session` cookies can remain valid. It requires source URI/database settings. An interrupted migration can be resumed with `npm run db:import-mongo -- --resume` before serving app traffic.
 
 ## Configuration
 
 - `TURSO_DATABASE_URL`: optional locally (defaults to `file:./lychee.db`); required in production for a persistent remote database.
 - `TURSO_AUTH_TOKEN`: remote Turso credential; not required for local SQLite.
 - `SOURCE_MONGODB_URI` and `SOURCE_MONGODB_DATABASE`: required only for the one-time importer.
+- `LICHESS_PUZZLES_CSV`: optional path to a decompressed Lichess CSV; alternatively pass the path to `db:import-lichess`.
 - `LICHESS_CLIENT_ID`: required to construct the Lichess OAuth client (`lib/auth.ts`).
 - `NEXT_PUBLIC_BASE_URL`: used as the OAuth callback base URL in production (`config/base-url.ts`).
 - `REDIRECT`: optional root-layout redirect target; if set, the layout redirects instead of rendering pages (`app/layout.tsx`).
@@ -70,6 +74,7 @@ Drizzle table definitions are in `lib/schema.ts`; typed read/write operations ar
 npm install
 npm run db:init
 npm run dev
+npm run db:import-lichess -- ./lichess_db_puzzle.csv --limit 25000
 npm test
 npm test -- test/sm2.test.ts
 npm run format
@@ -88,4 +93,4 @@ npm run build
 - `app/page.tsx`, `app/trainer/page.tsx`, `app/login/lichess/route.ts`, `app/login/lichess/callback/route.ts`
 - `app/api/puzzle/nextPuzzle/nextFor.ts`, `app/api/puzzle/submit/route.ts`
 - `lib/auth.ts`, `lib/auth-types.ts`, `lib/db.ts`, `lib/schema.ts`, `lib/store.ts`, `config/base-url.ts`
-- `scripts/init-db.ts`, `scripts/import-mongo.ts`, `src/`, `test/`
+- `scripts/init-db.ts`, `scripts/import-mongo.ts`, `scripts/import-lichess-csv.ts`, `src/`, `test/`
