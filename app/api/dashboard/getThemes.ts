@@ -3,12 +3,11 @@ import {
   getExistingUserRating,
   getThemeRatings,
 } from '@/src/rating/getRating';
-import { User } from 'lucia';
-import { RatingHistory } from '@/models/RatingHistory';
+import type { User } from '@/lib/auth-types';
 import * as d3 from 'd3';
 import { isIrrelevant } from '../puzzle/nextPuzzle/themeGenerator';
 import { allThemes } from '@/lib/utils';
-import { InitRatingColl } from '@/models/InitRatingColl';
+import { getInitialRating, getRatingHistory } from '@/lib/store';
 
 type RatingHistory = {
   rating: number;
@@ -27,7 +26,7 @@ export const getThemes = async (
   user: User
 ): Promise<[ThemeData[], string[]]> => {
   const themeRatings = await getThemeRatings(user, true);
-  const ratings = await RatingHistory.find({ username: user.username });
+  const ratings = await getRatingHistory(user.username);
 
   // group ratings by theme
   const ratingHistories: Record<string, RatingHistory[]> = {};
@@ -71,19 +70,11 @@ export const isRelevant = (theme: string) => !isIrrelevant(theme);
 
 export const ratingHistory = async (user: User) => {
   const userRating = await getExistingUserRating(user);
-  const initRating =
-    (await InitRatingColl.findOne({ username: user.username })) || 1500;
-  const ratings = (
-    await RatingHistory.find({
-      username: user.username,
-      theme: 'overall',
-    })
-  ).map((doc) => {
-    let { _id: _, ...rest } = doc._doc as any;
-    return rest as any as RatingHistory;
-  });
-  const firstRating =
-    initRating.rating || ratings[0]?.rating || userRating.rating;
+  const initRating = await getInitialRating(user.username);
+  const ratings = (await getRatingHistory(user.username, 'overall')).map(
+    ({ rating, createdAt }) => ({ rating, createdAt })
+  );
+  const firstRating = initRating || ratings[0]?.rating || userRating.rating;
   const firstRatingTime = d3.timeMinute.offset(
     ratings[0]?.createdAt || new Date(Date.now()),
     -10

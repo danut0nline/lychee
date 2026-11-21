@@ -9,7 +9,7 @@ import LichessLogo from '../ui/lichess-logo';
 import * as React from 'react';
 import { redirect, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { User } from 'lucia';
+import type { User } from '@/lib/auth-types';
 import { PersonIcon } from '@radix-ui/react-icons';
 
 export interface AuthButtonProps {

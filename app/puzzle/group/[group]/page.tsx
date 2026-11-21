@@ -14,7 +14,7 @@ export default async function Group({ params }: { params: { group: string } }) {
   if (group.length === 0) {
     return redirect('/');
   }
-  addRecentGroup(user.username, params.group);
+  await addRecentGroup(user.username, params.group);
   const { puzzle, rating, similar } = await nextPuzzleFor(user, false, group);
   return (
     <PuzzleMode

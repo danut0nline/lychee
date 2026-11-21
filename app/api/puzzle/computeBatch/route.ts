@@ -9,7 +9,7 @@ import {
   findPuzzlebyId,
 } from '@/src/similarityCache';
 import { Puzzle } from '@/types/lichess-api';
-import { SimilarityColl } from '@/models/SimilarityColl';
+import { saveSimilarityCache } from '@/lib/store';
 // import { ComputeBatch } from './computeBatchFor';
 
 export async function POST(req: NextRequest) {
@@ -32,9 +32,10 @@ export async function POST(req: NextRequest) {
         puzzleId: puzzleId,
         cache: similarPuzzles,
       };
-      await SimilarityColl.updateOne({ puzzleId: puzzleId }, instanceCreated, {
-        upsert: true,
-      });
+      await saveSimilarityCache(
+        instanceCreated.puzzleId,
+        instanceCreated.cache.map(String)
+      );
     }
   }
 

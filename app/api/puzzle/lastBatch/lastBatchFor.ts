@@ -1,11 +1,10 @@
-import { LastBatchColl } from '@/models/LastBatch';
 import { Puzzle } from '@/types/lichess-api';
-import { User } from 'lucia';
+import type { User } from '@/lib/auth-types';
+import { getLastBatch } from '@/lib/store';
 
 // Returns empty array if no last batch is found.
 const lastBatchFor = async (user: User): Promise<Puzzle[]> => {
-  const lastBatch = await LastBatchColl.findOne({ username: user.username });
-  return lastBatch ? lastBatch.batch : [];
+  return getLastBatch(user.username);
 };
 
 export default lastBatchFor;

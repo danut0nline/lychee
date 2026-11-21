@@ -6,7 +6,7 @@ import AuthButton from '@/components/auth/auth-button';
 import ModeToggler from './mode-toggle';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { HamburgerMenuIcon } from '@radix-ui/react-icons';
-import { User } from 'lucia';
+import type { User } from '@/lib/auth-types';
 import { Button } from './button';
 
 type NavbarProps = {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { User } from 'lucia';
+import type { User } from '@/lib/auth-types';
 import { getThemes, ratingHistory } from '../api/dashboard/getThemes';
 import ThemesList from './themes-list';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';

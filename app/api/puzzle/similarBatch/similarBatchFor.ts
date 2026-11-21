@@ -1,16 +1,12 @@
-import { User } from 'lucia';
+import type { User } from '@/lib/auth-types';
 import lastBatchFor from '../lastBatch/lastBatchFor';
 import { Puzzle } from '@/types/lichess-api';
 import {
   getUserSolvedPuzzleIDs,
   clampRating,
   radiusForRating,
-  puzzleFromDocument,
 } from '../nextPuzzle/nextFor';
-import { AllRoundColl } from '@/models/AllRoundColl';
-import { LastBatchColl } from '@/models/LastBatch';
 import { getExistingUserRating } from '@/src/rating/getRating';
-import mongoose from 'mongoose';
 import similarity_distance from '@/src/similarity';
 import {
   SimilarityInstance,
@@ -19,7 +15,12 @@ import {
   findSimilarUndoPuzzle,
   findPuzzlebyId,
 } from '@/src/similarityCache';
-import { SimilarityColl } from '@/models/SimilarityColl';
+import {
+  findPuzzlesForRating,
+  replaceSolvedPuzzleIds,
+  saveLastBatch,
+  saveSimilarityCache,
+} from '@/lib/store';
 
 // TODO: A bit of conflict here; in theory we want a large number of puzzle candidates,
 // but we also don't want to take into account those outside the user's rating range.
@@ -53,7 +54,10 @@ export const similarBatchForCompromised = async (
           puzzleId: puzzle.PuzzleId,
           cache: similarPuzzles,
         };
-        await SimilarityColl.create(instanceCreated);
+        await saveSimilarityCache(
+          instanceCreated.puzzleId,
+          instanceCreated.cache.map(String)
+        );
         instance = instanceCreated;
       }
 
@@ -61,35 +65,29 @@ export const similarBatchForCompromised = async (
       if (similarPuzzleId === 'Whole cache has been solved.') {
         const solved = await getUserSolvedPuzzleIDs(user);
         const cache = new Set(instance.cache);
-        let i = 0;
-        while (i < solved.length && !cache.has(solved[i])) {
-          i++;
+        const index = solved.findIndex((id) => cache.has(id));
+        if (index < 0) {
+          throw new Error(
+            'Exhausted similarity cache has no solved puzzle ID.'
+          );
         }
-        similarPuzzleId = solved[i];
-        const newSolved = solved.slice(0, i).concat(solved.slice(i + 1));
-        await AllRoundColl.updateOne(
-          { username: username },
-          { $set: { solved: newSolved } }
-        );
+        similarPuzzleId = solved[index];
+        solved.splice(index, 1);
+        await replaceSolvedPuzzleIds(username, solved);
       }
 
-      return (await findPuzzlebyId(similarPuzzleId)) as Puzzle;
+      const similarPuzzle = await findPuzzlebyId(String(similarPuzzleId));
+      if (!similarPuzzle) {
+        throw new Error(`Similar puzzle ${similarPuzzleId} was not found.`);
+      }
+      return similarPuzzle;
     })
   );
 
   if (persist) {
-    // Persist in both LastBatch and AllRound.
-    // TODO: persist in Round, if we eventually use Round.
     console.log(`Persisting ${solvedArray} for ${username}...`);
-    await AllRoundColl.updateOne(
-      { username: username },
-      { $set: { solved: solvedArray } }
-    );
-    await LastBatchColl.updateOne(
-      { username: username },
-      { batch: ret },
-      { upsert: true }
-    );
+    await replaceSolvedPuzzleIds(username, solvedArray);
+    await saveLastBatch(username, ret);
   }
   return ret;
 };
@@ -111,18 +109,11 @@ const preprocessing = async (
   // For efficiency, let's compute all non-solved puzzles in the radius.
   // Observe that the solved array should update to avoid repeats in
   // the batch. We will handle this manually later.
-  const candidates = (
-    await mongoose.connection
-      .collection('testPuzzles')
-      .find({
-        PuzzleId: { $nin: solvedArray },
-        Rating: {
-          $gt: clampedRating - radius,
-          $lt: clampedRating + radius,
-        },
-      })
-      .toArray()
-  ).map(puzzleFromDocument);
+  const candidates = await findPuzzlesForRating(
+    username,
+    clampedRating - radius,
+    clampedRating + radius
+  );
 
   console.log(`Found ${candidates.length} candidates.`);
   // If number of candidates is too small, let's increase the compromise factor.

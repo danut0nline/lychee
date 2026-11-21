@@ -1,4 +1,7 @@
-import { RecentGroup } from '@/models/RecentGroup';
+import {
+  getRecentGroups as readRecentGroups,
+  saveRecentGroup,
+} from '@/lib/store';
 
 type RecentGroup = {
   username: string;
@@ -9,16 +12,16 @@ type RecentGroup = {
 export const getRecentGroups = async (
   username: string
 ): Promise<RecentGroup[]> => {
-  return RecentGroup.find({ username }).sort({ lastUsed: -1 });
+  return (await readRecentGroups(username)).map((group) => ({
+    username: group.username,
+    groupId: group.groupId,
+    lastUsed: new Date(group.lastUsed),
+  }));
 };
 
 export const addRecentGroup = async (
   username: string,
   groupId: string
 ): Promise<void> => {
-  await RecentGroup.updateOne(
-    { username, groupId },
-    { lastUsed: new Date() },
-    { upsert: true }
-  );
+  await saveRecentGroup(username, groupId);
 };

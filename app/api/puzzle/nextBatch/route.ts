@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 import nextPuzzleFor from '../nextPuzzle/nextFor';
 import addRound from '../submit/addRound';
 import { Puzzle } from '@/types/lichess-api';
-import { LastBatchColl } from '@/models/LastBatch';
+import { saveLastBatch } from '@/lib/store';
 
 export async function POST(req: NextRequest) {
   await dbConnect();
@@ -26,12 +26,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Persist this batch in LastBatchColl.
-  await LastBatchColl.updateOne(
-    { username: user.username },
-    { batch: puzzles },
-    { upsert: true }
-  );
+  // Persist this batch for the similar-puzzle flow.
+  await saveLastBatch(user.username, puzzles);
 
   return new Response(JSON.stringify(puzzles), {
     status: 200,

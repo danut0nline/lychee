@@ -1,14 +1,16 @@
 import { OAuth2RequestError } from 'arctic';
-import { generateId } from 'lucia';
+import { randomBytes } from 'node:crypto';
 import { cookies } from 'next/headers';
-import { lichess, lucia } from '@/lib/auth';
+import { createSession, lichess } from '@/lib/auth';
 import { dbConnect } from '@/lib/db';
-import User from '@/models/User';
 import { LichessUser } from '@/types/lichess-api';
 import { fetchLichessRating } from '@/src/rating/getRating';
-import { RatingColl } from '@/models/RatingColl';
-import { AllRoundColl } from '@/models/AllRoundColl';
-import { InitRatingColl } from '@/models/InitRatingColl';
+import {
+  createInitialUserData,
+  createUser,
+  getUserByUsername,
+} from '@/lib/store';
+import type { User } from '@/lib/auth-types';
 
 export async function GET(request: Request): Promise<Response> {
   await dbConnect();
@@ -44,21 +46,10 @@ export async function GET(request: Request): Promise<Response> {
 
     const lichessUser: LichessUser = await lichessUserResponse.json();
 
-    cookies().set('token', tokens.accessToken, {
-      sameSite: 'lax',
-      secure: true,
-    });
-
-    const existingUser = await User.findOne({ username: lichessUser.id });
+    const existingUser = await getUserByUsername(lichessUser.id);
 
     if (existingUser) {
-      const session = await lucia.createSession(existingUser.id, {});
-      const sessionCookie = lucia.createSessionCookie(session.id);
-      cookies().set(
-        sessionCookie.name,
-        sessionCookie.value,
-        sessionCookie.attributes
-      );
+      await createSession(existingUser.id);
       return new Response(null, {
         status: 302,
         headers: {
@@ -67,37 +58,16 @@ export async function GET(request: Request): Promise<Response> {
       });
     }
 
-    const userId = generateId(15);
-    const user = await User.create({
-      _id: userId,
-      username: lichessUser.id,
-    });
+    const userId = randomBytes(12).toString('base64url');
+    const user: User = { id: userId, username: lichessUser.id };
+    await createUser(user);
+    const savedUser = await getUserByUsername(user.username);
+    if (!savedUser) throw new Error('Failed to create the local user record.');
 
     // Initialise user rating.
-    const userRating = await fetchLichessRating(user);
-    await RatingColl.create({
-      username: user.username,
-      ...userRating,
-    });
-    await InitRatingColl.create({
-      username: user.username,
-      rating: userRating.rating,
-    });
-
-    // Initialise user rounds.
-    // NB: This is important. If new user, set solved to be empty. The submit endpoint relies on this.
-    await AllRoundColl.create({
-      username: user.username,
-      solved: [],
-    });
-
-    const session = await lucia.createSession(userId, {});
-    const sessionCookie = lucia.createSessionCookie(session.id);
-    cookies().set(
-      sessionCookie.name,
-      sessionCookie.value,
-      sessionCookie.attributes
-    );
+    const userRating = await fetchLichessRating(savedUser);
+    await createInitialUserData(savedUser.username, userRating);
+    await createSession(savedUser.id);
     return new Response(null, {
       status: 302,
       headers: {

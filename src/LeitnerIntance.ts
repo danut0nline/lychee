@@ -1,7 +1,7 @@
 import { booleanWithProbability } from '@/lib/utils';
-import { ThemedLeitnerColl } from '@/models/ThemedLeitnerColl';
 import { Puzzle } from '@/types/lichess-api';
-import { User } from 'lucia';
+import type { User } from '@/lib/auth-types';
+import { getLeitnerReview, saveLeitnerReview } from '@/lib/store';
 
 const BOX_A_PROB: number = 0.8;
 const BOX_LIMIT: number = 50;
@@ -19,14 +19,7 @@ const findLeitner = async (
   user: User,
   groupID: string
 ): Promise<LeitnerInstance | undefined> => {
-  const leitner = await ThemedLeitnerColl.findOne({
-    username: user.username,
-    groupID: groupID,
-  });
-  if (!leitner) {
-    return undefined;
-  }
-  return { boxA: leitner.boxA, boxB: leitner.boxB };
+  return getLeitnerReview(user.username, groupID);
 };
 
 const nextPuzzle = ({ boxA, boxB }: LeitnerInstance): Puzzle | undefined => {
@@ -104,12 +97,7 @@ export const updateLeitner = async (
     if (!correct) {
       // We should initialise a default Leitner instance with this puzzle in Box A.
       console.log('Creating themed Leiitner');
-      await ThemedLeitnerColl.create({
-        username: user.username,
-        boxA: [puzzle],
-        boxB: [],
-        groupID: groupID,
-      });
+      await saveLeitnerReview(user.username, groupID, [puzzle], []);
     }
     return;
   }
@@ -124,8 +112,5 @@ export const updateLeitner = async (
   console.log(
     `After update: boxA = ${leitner.boxA.map((puzzle) => puzzle.PuzzleId)}, boxB = ${leitner.boxB.map((puzzle) => puzzle.PuzzleId)}`
   );
-  await ThemedLeitnerColl.updateOne(
-    { username: user.username, groupID: groupID },
-    { boxA: leitner.boxA, boxB: leitner.boxB }
-  );
+  await saveLeitnerReview(user.username, groupID, leitner.boxA, leitner.boxB);
 };

@@ -1,5 +1,5 @@
-import { TimeThemeColl } from '@/models/TimeThemeColl';
 import { Rating } from './rating/getRating';
+import { getThemeTime } from '@/lib/store';
 
 const MAX_CORRECT_TIME: number = 45;
 const DELTA_SCALE_FACTOR: number = 6;
@@ -97,15 +97,9 @@ const sm2RandomThemeFromRatingMap = async (
 ): Promise<string> => {
   const result = new Map<string, Rating>();
   for (const [theme, v] of oldElos) {
-    const entry = await TimeThemeColl.findOne({
-      username: usernname,
-      theme: theme,
-    });
-    if (entry) {
-      v.rating = scaleGlickoByTime(
-        v.rating,
-        Math.min(entry.time, MAX_CORRECT_TIME)
-      );
+    const time = await getThemeTime(usernname, theme);
+    if (time !== undefined) {
+      v.rating = scaleGlickoByTime(v.rating, Math.min(time, MAX_CORRECT_TIME));
     }
     result.set(theme, v);
   }

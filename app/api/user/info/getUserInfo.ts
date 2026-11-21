@@ -1,6 +1,6 @@
 import { validateRequest } from '@/lib/auth';
 import { dbConnect } from '@/lib/db';
-import { User } from 'lucia';
+import type { User } from '@/lib/auth-types';
 import { NextRequest } from 'next/server';
 
 export interface UserInfo {

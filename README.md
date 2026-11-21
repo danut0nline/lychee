@@ -31,17 +31,15 @@ cd lychee
 npm install
 ```
 
-Setup .env file
+Set up environment
 
 ```bash
-mv .env.template .env.local
+cp .env.template .env.local
 ```
 
-Run/host a mongoDB server and set its uri in `.env.local`
+For local development, `TURSO_DATABASE_URL=file:./lychee.db` uses a local SQLite database. Set `LICHESS_CLIENT_ID` to enable sign-in. Initialize the schema with `npm run db:init` (the app also initializes it on first request). For Vercel, configure `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` for a remote Turso database; a local SQLite file is not persistent across serverless deployments.
 
-```env
-MONGODB_URI=...
-```
+To migrate an existing MongoDB database and its `testPuzzles` corpus, set `SOURCE_MONGODB_URI`, `SOURCE_MONGODB_DATABASE`, and the destination Turso variables, then run `npm run db:import-mongo` against a new, empty destination database. If an import is interrupted, rerun with `npm run db:import-mongo -- --resume` before using the destination app. See [the technical specification](docs/technical-specification.md) for details.
 
 Run the server
 

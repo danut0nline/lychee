@@ -1,6 +1,6 @@
 import { Puzzle } from '@/types/lichess-api';
-import { User } from 'lucia';
-import mongoose from 'mongoose';
+import type { User } from '@/lib/auth-types';
+import { findPuzzleBatch } from '@/lib/store';
 
 const RATING_RADIUS = 300;
 const BATCH_SIZE = 10;
@@ -14,20 +14,11 @@ export async function getPuzzleBatch(
   ).then((res) => res.json());
   const rating = perfs['puzzle']['rating'];
 
-  const puzzles = (
-    await mongoose.connection
-      .collection('testPuzzles')
-      .find(
-        {
-          PuzzleId: { $nin: exceptions },
-          Rating: { $gt: rating - RATING_RADIUS, $lt: rating + RATING_RADIUS },
-        },
-        { limit: BATCH_SIZE }
-      )
-      .toArray()
-  ).map((p) => {
-    let { _id: _, ...rest } = p;
-    return rest as any as Puzzle;
-  }); // TODO(sm3421): lmao
-  return puzzles;
+  return findPuzzleBatch(
+    user.username,
+    rating - RATING_RADIUS,
+    rating + RATING_RADIUS,
+    BATCH_SIZE,
+    exceptions
+  );
 }

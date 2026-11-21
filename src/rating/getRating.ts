@@ -1,8 +1,7 @@
-import { RatingColl } from '@/models/RatingColl';
 import { Puzzle } from '@/types/lichess-api';
-import { User } from 'lucia';
-import { UserThemeColl } from '@/models/UserThemeColl';
+import type { User } from '@/lib/auth-types';
 import { isIrrelevant } from '@/app/api/puzzle/nextPuzzle/themeGenerator';
+import { getRating as getStoredRating, getUserThemeRatings } from '@/lib/store';
 
 export type Rating = {
   rating: number;
@@ -40,16 +39,9 @@ export const fetchLichessRating = async (user: User): Promise<Rating> => {
 // Gets a user's rating from through the collection.
 // The user must have logged in once before - this function will throw an error if not.
 export const getExistingUserRating = async (user: User): Promise<Rating> =>
-  RatingColl.findOne({ username: user.username }).then(async (result) => {
-    if (result) {
-      return {
-        rating: result.rating,
-        ratingDeviation: result.ratingDeviation,
-        volatility: result.volatility,
-        numberOfResults: result.numberOfResults,
-      };
-    }
-    throw new Error('User not present in rating collection.');
+  getStoredRating(user.username).then((result) => {
+    if (!result) throw new Error('User not present in rating collection.');
+    return result;
   });
 
 export const getPuzzleRating = (puzzle: Puzzle): Rating => ({
@@ -64,11 +56,7 @@ export const getThemeRatings = async (
   filterOutIrrelevant: boolean // Whether to filter out irrelevant themes.
 ): Promise<Map<string, Rating>> => {
   const map: Map<string, Rating> = new Map();
-  (
-    await UserThemeColl.find({
-      username: user.username,
-    })
-  ).forEach((document) => {
+  (await getUserThemeRatings(user.username)).forEach((document) => {
     if (filterOutIrrelevant && isIrrelevant(document.theme)) {
       return;
     }

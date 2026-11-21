@@ -1,18 +1,22 @@
-import { AllRoundColl } from '@/models/AllRoundColl';
 import {
   Rating,
   getExistingUserRating,
   getThemeRatings,
 } from '@/src/rating/getRating';
 import { Puzzle } from '@/types/lichess-api';
-import { User } from 'lucia';
-import mongoose from 'mongoose';
+import type { User } from '@/lib/auth-types';
 import sm2RandomThemeFromRatingMap from '../../../../src/sm2';
 import frequentiallyRandomTheme, { isIrrelevant } from './themeGenerator';
-import { ActivePuzzleColl } from '@/models/ActivePuzzle';
 import { booleanWithProbability, toGroupId } from '@/lib/utils';
 import { nextLeitnerReview } from '@/src/LeitnerIntance';
 import { similarBatchForCompromised } from '../similarBatch/similarBatchFor';
+import {
+  deleteActivePuzzle,
+  findPuzzleForRating,
+  getActivePuzzle,
+  getSolvedPuzzleIds,
+  saveActivePuzzle,
+} from '@/lib/store';
 
 const MAX_REPS: number = 12;
 const MAX_COMPROMISE: number = 3;
@@ -27,18 +31,7 @@ export type PuzzleWithUserRating = {
 };
 
 export const getUserSolvedPuzzleIDs = async (user: User): Promise<string[]> => {
-  const doc = await AllRoundColl.findOne({ username: user.username });
-  if (!doc) {
-    throw new Error(
-      'AllRound collection not populated with user, should happen on first login'
-    );
-  }
-  return doc.solved;
-};
-
-export const puzzleFromDocument = (document: any): Puzzle => {
-  let { _id: _, ...rest } = document;
-  return rest as any as Puzzle;
+  return getSolvedPuzzleIds(user.username);
 };
 
 // Clamp rating between 400 and 2700, similar to
@@ -53,9 +46,9 @@ export const radiusForRating = (rating: number, compromise: number): number =>
   0.75 * compromise * (100 + Math.abs(1500 - rating) / 4);
 
 const nextPuzzleForThemeAndRating = async (
+  username: string,
   theme: string,
   rawRating: number,
-  exceptions: any,
   compromise: number = 1
 ): Promise<Puzzle | undefined> => {
   if (compromise > MAX_COMPROMISE) {
@@ -64,34 +57,29 @@ const nextPuzzleForThemeAndRating = async (
   const rating = compromise > 1 ? rawRating : clampRating(rawRating);
   const radius = radiusForRating(rating, compromise);
   console.log(`radius = ${radius}, theme = ${theme}, rating = ${rating}`);
-  const p = await mongoose.connection.collection('testPuzzles').findOne({
-    PuzzleId: { $nin: exceptions },
-    Rating: {
-      $gt: rating - radius,
-      $lt: rating + radius,
-    },
-    // TODO: Improve this. Maybe transform testPuzzles to not have this annoying
-    // space-separated string of themes?
-    Themes: { $regex: new RegExp('\\b' + theme + '\\b', 'i') },
-  });
+  const p = await findPuzzleForRating(
+    username,
+    theme,
+    rating - radius,
+    rating + radius
+  );
   // No puzzle found; increase compromise.
-  if (p === null) {
+  if (!p) {
     return await nextPuzzleForThemeAndRating(
+      username,
       theme,
       rating,
-      exceptions,
       compromise + 1
     );
   }
-  return puzzleFromDocument(p);
+  return p;
 };
 
 const nextPuzzleRepetitions = async (
   username: string,
   userRating: number,
   reps: number,
-  ratingMap: Map<string, Rating>,
-  exceptions: any
+  ratingMap: Map<string, Rating>
 ): Promise<Puzzle | undefined> => {
   if (reps == MAX_REPS) {
     console.log('Maximum repetitions reached during puzzle selection');
@@ -107,7 +95,7 @@ const nextPuzzleRepetitions = async (
     rating = ratingMap.get(theme)!.rating;
     console.log(`Using rating: ${rating} for theme: ${theme}`);
   }
-  const p = await nextPuzzleForThemeAndRating(theme, rating, exceptions);
+  const p = await nextPuzzleForThemeAndRating(username, theme, rating);
   if (p) {
     if (isIrrelevant(theme)) {
       throw new Error(
@@ -119,21 +107,15 @@ const nextPuzzleRepetitions = async (
     );
     return p;
   }
-  return await nextPuzzleRepetitions(
-    username,
-    rating,
-    reps + 1,
-    ratingMap,
-    exceptions
-  );
+  return await nextPuzzleRepetitions(username, rating, reps + 1, ratingMap);
 };
 
 const nextThemedPuzzlesForRepetitions = async (
+  username: string,
   userRating: number,
   ratingMap: Map<string, Rating>,
   reps: number,
-  themeGroup: string[],
-  expceptions: any
+  themeGroup: string[]
 ): Promise<Puzzle | undefined> => {
   if (reps == MAX_REPS) {
     console.log('Maximum repetitions reached during puzzle selection');
@@ -144,17 +126,17 @@ const nextThemedPuzzlesForRepetitions = async (
   // selection. Otherwise, use user's rating.
   const rating = ratingMap.get(theme)?.rating || userRating;
   console.log(`Using rating: ${rating} for theme: ${theme}`);
-  const p = await nextPuzzleForThemeAndRating(theme, rating, expceptions);
+  const p = await nextPuzzleForThemeAndRating(username, theme, rating);
   if (p) {
     console.log(`Found grouped theme ${theme} after ${reps} reps.`);
     return p;
   }
   return await nextThemedPuzzlesForRepetitions(
+    username,
     userRating,
     ratingMap,
     reps + 1,
-    themeGroup,
-    expceptions
+    themeGroup
   );
 };
 
@@ -167,22 +149,18 @@ const nextPuzzleFor = async (
     const groupId = toGroupId(themeGroup);
 
     if (!woodpecker) {
-      const activePuzzle = await ActivePuzzleColl.findOne({
-        username: user.username,
-      });
+      const activePuzzle = await getActivePuzzle(user.username);
       if (activePuzzle) {
-        if (groupId !== activePuzzle.groupID) {
+        if (groupId !== activePuzzle.groupId) {
           // NB: Preserving active puzzles per-modes is tricky. We can't permit this mode solving that puzzle,
           // then back in previous mode user solving it again.
-          await ActivePuzzleColl.deleteOne({ username: user.username });
+          await deleteActivePuzzle(user.username);
         } else {
           console.log('Found active puzzle');
           return {
-            puzzle: JSON.parse(activePuzzle.puzzle) as Puzzle,
+            puzzle: activePuzzle.puzzle,
             rating: rating,
-            similar: activePuzzle.reviewee
-              ? [JSON.parse(activePuzzle.reviewee) as Puzzle]
-              : [],
+            similar: activePuzzle.reviewee ? [activePuzzle.reviewee] : [],
           };
         }
       }
@@ -190,7 +168,7 @@ const nextPuzzleFor = async (
 
     const result = await (async () => {
       // TODO: Iterate to better handle repeat avoidance.
-      const exceptions: string[] = await getUserSolvedPuzzleIDs(user);
+      const exceptions = await getUserSolvedPuzzleIDs(user);
       if (!woodpecker && booleanWithProbability(LEITNER_PROBABILITY)) {
         console.log('Trying to use Leitner...');
         const puzzleToReview = await nextLeitnerReview(user, groupId);
@@ -221,18 +199,17 @@ const nextPuzzleFor = async (
       return {
         puzzle: groupId
           ? await nextThemedPuzzlesForRepetitions(
+              user.username,
               rating.rating,
               ratingMap,
               0,
-              themeGroup,
-              exceptions
+              themeGroup
             )
           : await nextPuzzleRepetitions(
               user.username,
               rating.rating,
               0,
-              ratingMap,
-              exceptions
+              ratingMap
             ),
       };
     })();
@@ -243,17 +220,11 @@ const nextPuzzleFor = async (
       );
       // Persist selection as active puzzle.
       if (!woodpecker) {
-        await ActivePuzzleColl.updateOne(
-          { username: user.username },
-          {
-            username: user.username,
-            puzzle: JSON.stringify(result.puzzle),
-            reviewee: result.similar
-              ? JSON.stringify(result.similar[0])
-              : undefined,
-            groupID: groupId,
-          },
-          { upsert: true }
+        await saveActivePuzzle(
+          user.username,
+          result.puzzle,
+          result.similar?.[0],
+          groupId
         );
       }
     }

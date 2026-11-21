@@ -1,103 +1,121 @@
-import { Lucia, User, Session } from 'lucia';
-import { MongodbAdapter } from '@lucia-auth/adapter-mongodb';
-import { Lichess } from 'arctic';
+import { createHash, randomBytes } from 'node:crypto';
 import { cache } from 'react';
 import { cookies } from 'next/headers';
-import { BASE_URL } from '@/config/base-url';
-import mongoose from 'mongoose';
-import { dbConnect } from './db';
 import { redirect } from 'next/navigation';
+import { BASE_URL } from '@/config/base-url';
+import { Lichess } from 'arctic';
+import { dbConnect } from './db';
+import {
+  createSession as insertSession,
+  deleteSession,
+  getSessionByTokenHash,
+  getUserById,
+  updateSessionExpiry,
+} from './store';
+import type { Session, User } from './auth-types';
 
-const adapter = new MongodbAdapter(
-  mongoose.connection.collection('sessions'),
-  mongoose.connection.collection('users')
+const SESSION_COOKIE = 'auth_session';
+const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
+const SESSION_REFRESH_THRESHOLD_MS = 15 * 24 * 60 * 60 * 1000;
+
+const hashSessionId = (sessionId: string): string =>
+  createHash('sha256').update(sessionId).digest('hex');
+
+const sessionCookieAttributes = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  path: '/',
+});
+
+const refreshSessionCookie = (id: string, expiresAt: Date): void => {
+  try {
+    cookies().set(SESSION_COOKIE, id, {
+      ...sessionCookieAttributes(),
+      expires: expiresAt,
+    });
+  } catch {
+    // Next.js does not permit cookie writes while rendering a Server Component.
+  }
+};
+
+const clearSessionCookie = (): void => {
+  try {
+    cookies().set(SESSION_COOKIE, '', {
+      ...sessionCookieAttributes(),
+      expires: new Date(0),
+    });
+  } catch {
+    // Cookie clearing is best-effort during Server Component rendering.
+  }
+};
+
+export const lichess = new Lichess(
+  process.env.LICHESS_CLIENT_ID!,
+  `${BASE_URL}/login/lichess/callback`
 );
 
-export const lucia = new Lucia(adapter, {
-  sessionCookie: {
-    attributes: {
-      secure: process.env.NODE_ENV === 'production',
-    },
-  },
-  getUserAttributes: (attributes) => {
-    return {
-      username: attributes.username,
-    };
-  },
-});
+export const createSession = async (userId: string): Promise<Session> => {
+  await dbConnect();
+  const id = randomBytes(32).toString('base64url');
+  const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
+  await insertSession(hashSessionId(id), userId, expiresAt);
+  cookies().set(SESSION_COOKIE, id, {
+    ...sessionCookieAttributes(),
+    expires: expiresAt,
+  });
+  return { id, userId, expiresAt };
+};
 
 export const validateRequest = cache(
   async (): Promise<
     { user: User; session: Session } | { user: null; session: null }
   > => {
     await dbConnect();
-    const sessionId = cookies().get(lucia.sessionCookieName)?.value ?? null;
-    if (!sessionId) {
-      return {
-        user: null,
-        session: null,
-      };
+    const id = cookies().get(SESSION_COOKIE)?.value;
+    if (!id) return { user: null, session: null };
+
+    const tokenHash = hashSessionId(id);
+    const storedSession = await getSessionByTokenHash(tokenHash);
+    if (!storedSession) {
+      clearSessionCookie();
+      return { user: null, session: null };
     }
 
-    const result = await lucia.validateSession(sessionId);
-    // next.js throws when you attempt to set cookie when rendering page
-    try {
-      if (result.session && result.session.fresh) {
-        const sessionCookie = lucia.createSessionCookie(result.session.id);
-        cookies().set(
-          sessionCookie.name,
-          sessionCookie.value,
-          sessionCookie.attributes
-        );
-      }
-      if (!result.session) {
-        const sessionCookie = lucia.createBlankSessionCookie();
-        cookies().set(
-          sessionCookie.name,
-          sessionCookie.value,
-          sessionCookie.attributes
-        );
-      }
-    } catch {}
-    return result;
-  }
-);
+    const expiresAt = new Date(storedSession.expiresAt);
+    if (expiresAt.getTime() <= Date.now()) {
+      await deleteSession(tokenHash);
+      clearSessionCookie();
+      return { user: null, session: null };
+    }
 
-export async function logout(): Promise<ActionResult> {
-  const { session } = await validateRequest();
-  if (!session) {
+    const user = await getUserById(storedSession.userId);
+    if (!user) {
+      await deleteSession(tokenHash);
+      return { user: null, session: null };
+    }
+
+    if (expiresAt.getTime() - Date.now() < SESSION_REFRESH_THRESHOLD_MS) {
+      expiresAt.setTime(Date.now() + SESSION_DURATION_MS);
+      await updateSessionExpiry(tokenHash, expiresAt);
+      refreshSessionCookie(id, expiresAt);
+    }
+
     return {
-      error: 'Unauthorized',
+      user,
+      session: { id, userId: user.id, expiresAt },
     };
   }
+);
 
-  await lucia.invalidateSession(session.id);
+export async function logout(): Promise<{ error: string | null }> {
+  const { session } = await validateRequest();
+  if (!session) return { error: 'Unauthorized' };
 
-  const sessionCookie = lucia.createBlankSessionCookie();
-  cookies().set(
-    sessionCookie.name,
-    sessionCookie.value,
-    sessionCookie.attributes
-  );
+  await deleteSession(hashSessionId(session.id));
+  cookies().set(SESSION_COOKIE, '', {
+    ...sessionCookieAttributes(),
+    expires: new Date(0),
+  });
   return redirect('/');
 }
-
-interface ActionResult {
-  error: string | null;
-}
-
-declare module 'lucia' {
-  interface Register {
-    Lucia: typeof lucia;
-    DatabaseUserAttributes: DatabaseUserAttributes;
-  }
-}
-
-interface DatabaseUserAttributes {
-  username: string;
-}
-
-export const lichess = new Lichess(
-  process.env.LICHESS_CLIENT_ID!,
-  `${BASE_URL}/login/lichess/callback`
-);
