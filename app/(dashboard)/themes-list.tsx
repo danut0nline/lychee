@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import LineChartPeriod from '@/components/ui/line-chart-period';
 import { Card, CardContent } from '@/components/ui/card';
 import { capitalize, toGroupId } from '@/lib/utils';
@@ -44,40 +44,39 @@ export default function ThemesList({
     return theme;
   };
 
-  const updateFilter = async (
-    sortBy: SortBy,
-    order: Order,
-    filter: string
-  ): Promise<void> => {
-    const filteredThemes = themes_.filter((theme) =>
-      theme.theme.toLowerCase().includes(filter)
-    );
-    const filteredMissing = missing_.filter((theme) =>
-      theme.toLowerCase().includes(filter)
-    );
-
-    if (sortBy === 'rating') {
-      filteredThemes.sort((a, b) => a.rating.rating - b.rating.rating);
-    } else if (sortBy === 'update') {
-      filteredThemes.sort(
-        (a, b) =>
-          a.ratings[a.ratings.length - 1].createdAt.getTime() -
-          b.ratings[b.ratings.length - 1].createdAt.getTime()
+  const updateFilter = useCallback(
+    async (sortBy: SortBy, order: Order, filter: string): Promise<void> => {
+      const filteredThemes = themes_.filter((theme) =>
+        theme.theme.toLowerCase().includes(filter)
       );
-    } else if (sortBy === 'delta') {
-      filteredThemes.sort((a, b) => a.delta - b.delta);
-    }
+      const filteredMissing = missing_.filter((theme) =>
+        theme.toLowerCase().includes(filter)
+      );
 
-    if (order === 'desc') {
-      filteredThemes.reverse();
-    }
-    if (sortBy === 'alpha' && order === 'desc') {
-      filteredMissing.reverse();
-    }
+      if (sortBy === 'rating') {
+        filteredThemes.sort((a, b) => a.rating.rating - b.rating.rating);
+      } else if (sortBy === 'update') {
+        filteredThemes.sort(
+          (a, b) =>
+            a.ratings[a.ratings.length - 1].createdAt.getTime() -
+            b.ratings[b.ratings.length - 1].createdAt.getTime()
+        );
+      } else if (sortBy === 'delta') {
+        filteredThemes.sort((a, b) => a.delta - b.delta);
+      }
 
-    setThemes(filteredThemes);
-    setMissing(filteredMissing);
-  };
+      if (order === 'desc') {
+        filteredThemes.reverse();
+      }
+      if (sortBy === 'alpha' && order === 'desc') {
+        filteredMissing.reverse();
+      }
+
+      setThemes(filteredThemes);
+      setMissing(filteredMissing);
+    },
+    [themes_, missing_]
+  );
 
   const handleClick = (theme: string) => {
     if (selected.includes(theme)) {
