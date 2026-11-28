@@ -183,7 +183,9 @@ export default function ChesscomImportPanel({ username, initialJobs }: Props) {
           </ul>
         )}
       </div>
-      {jobs.length > 0 && <DeleteGameDataButton onDeleted={() => setJobs([])} />}
+      {jobs.length > 0 && (
+        <DeleteGameDataButton onDeleted={() => setJobs([])} />
+      )}
     </section>
   );
 }

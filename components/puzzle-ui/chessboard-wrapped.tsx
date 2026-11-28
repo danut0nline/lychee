@@ -1,7 +1,7 @@
 'use client';
 
 import { Chess, Square, Piece as ChessjsPiece, Move, SQUARES } from 'chess.js';
-import { createRef, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Chessboard, ClearPremoves } from 'react-chessboard';
 import {
   CustomPieces,
@@ -92,17 +92,19 @@ const ChessboardWrapped: React.FC<ChessboardWrappedProps> = ({
   const [moveFrom, setMoveFrom] = useState<Square | null>(null);
   const [showPromotion, setShowPromotion] = useState(false);
   const [moveTo, setMoveTo] = useState<Square | null>(null);
-  const removePremoveRef = createRef<ClearPremoves>();
+  const removePremoveRef = useRef<ClearPremoves>(null);
   const [checkedSquare, setCheckedSquares] = useState<CustomSquareStyles>({});
 
   /** CHECKING FOR CHECKS */
   useEffect(() => {
-    if (game.inCheck()) {
+    const position = new Chess(fen);
+    const currentTurn = fen.split(' ')[1];
+    if (position.inCheck()) {
       for (let square of SQUARES) {
         if (
-          game.get(square) &&
-          game.get(square).type === 'k' &&
-          game.get(square).color === turn
+          position.get(square) &&
+          position.get(square).type === 'k' &&
+          position.get(square).color === currentTurn
         ) {
           setCheckedSquares({ [square]: SQUARE_STYLES.CHECKED_SQUARE });
           return;
@@ -114,23 +116,23 @@ const ChessboardWrapped: React.FC<ChessboardWrappedProps> = ({
   }, [fen]);
 
   /** MAKING SURE PARENT COMPONENT KNOWS WHEN INITIAL BOARD IS RENDERED */
-  const timeouts: Array<NodeJS.Timeout> = [];
-  function tryTriggerRender() {
-    if (renderedCallback) {
+  useEffect(() => {
+    if (!renderedCallback) return;
+
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    const tryTriggerRender = () => {
       if (removePremoveRef.current) {
         renderedCallback();
       } else {
-        const timeout = setTimeout(tryTriggerRender, 300);
-        timeouts.push(timeout);
+        timeouts.push(setTimeout(tryTriggerRender, 300));
       }
-    }
-  }
-  useEffect(() => {
-    if (renderedCallback) tryTriggerRender();
+    };
+    tryTriggerRender();
+
     return () => {
       timeouts.forEach((to) => clearTimeout(to));
     };
-  }, [removePremoveRef, renderedCallback]);
+  }, [renderedCallback]);
 
   /** MORE STYLING THAT NEED TO BE RENDERED */
   // custom board pieces

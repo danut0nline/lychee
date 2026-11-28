@@ -45,7 +45,7 @@ function LineChartPeriod({ data, theme }: LineChartPeriodProps) {
       }
       return d;
     },
-    [period]
+    [period, data]
   );
 
   return (

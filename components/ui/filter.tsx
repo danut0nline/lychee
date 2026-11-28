@@ -47,7 +47,7 @@ export default function Filter({ updateFilter }: FilterProps) {
 
   useEffect(() => {
     updateFilter(sortBy, order, filter);
-  }, [sortBy, order, filter]);
+  }, [sortBy, order, filter, updateFilter]);
 
   return (
     <div className='flex flex-wrap justify-center gap-4 items-center'>

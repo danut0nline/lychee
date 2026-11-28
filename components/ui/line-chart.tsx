@@ -24,15 +24,20 @@ export const LineChart = ({
   const boundsWidth = Math.max(width - MARGIN.right - MARGIN.left, 0);
   const boundsHeight = Math.max(height - MARGIN.top - MARGIN.bottom, 0);
 
-  // Start and end of the axis must be in the Date format
-  const start = offset(new Date(Date.now()));
-  const end = new Date(Date.now());
+  // Keep the time domain stable between renders until its offset changes.
+  const { start, end } = useMemo(() => {
+    const end = new Date();
+    return { start: offset(new Date(end)), end };
+  }, [offset]);
 
   // Extend left and right of line graph
   const data = useMemo<Datapoint[]>(() => {
     const ans = [...data_];
     if (!ans.length || ans[0].createdAt > start) {
-      ans.unshift({ createdAt: start, rating: ans[0].rating });
+      ans.unshift({
+        createdAt: start,
+        rating: ans[0]?.rating ?? data_[0]?.rating ?? 1500,
+      });
     }
     ans.push({
       createdAt: new Date(),
@@ -51,7 +56,7 @@ export const LineChart = ({
     min = Math.max(min - padding, 0);
     max = Math.min(max + padding, 4000);
     return d3.scaleLinear().domain([min, max]).range([boundsHeight, 0]);
-  }, [boundsHeight, data]);
+  }, [boundsHeight, data, start, end]);
 
   const xScale = useMemo(() => {
     return d3.scaleTime().domain([start, end]).range([0, boundsWidth]);

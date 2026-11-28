@@ -28,9 +28,7 @@ export default function AnalysisControls({
     () => () => {
       if (activeController.current) {
         activeController.current.abort();
-        navigator.sendBeacon(
-          `/api/chesscom/import/${jobId}/analysis/pause`
-        );
+        navigator.sendBeacon(`/api/chesscom/import/${jobId}/analysis/pause`);
       }
     },
     [jobId]
@@ -164,9 +162,7 @@ export default function AnalysisControls({
     } catch (cause) {
       setError(true);
       setMessage(
-        cause instanceof Error
-          ? cause.message
-          : 'Could not retry analysis.'
+        cause instanceof Error ? cause.message : 'Could not retry analysis.'
       );
     } finally {
       setBusy(false);

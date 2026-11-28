@@ -52,8 +52,8 @@ export default function DeleteGameDataButton({ onDeleted }: Props) {
         {deleting ? 'Deleting…' : 'Delete imported game data'}
       </Button>
       <p className='text-xs text-muted-foreground'>
-        Removes imported PGNs, analysis, generated puzzles, review progress,
-        and this category&apos;s rating. Keeps your Chess.com setting and shared
+        Removes imported PGNs, analysis, generated puzzles, review progress, and
+        this category&apos;s rating. Keeps your Chess.com setting and shared
         Lichess data.
       </p>
       {message && (

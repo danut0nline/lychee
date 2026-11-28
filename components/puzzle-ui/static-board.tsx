@@ -9,11 +9,29 @@ import {
 } from 'react-chessboard/dist/chessboard/types';
 import { SQUARE_STYLES } from './chessboard-wrapped';
 
+const pieces: Piece[] = [
+  'wP',
+  'wN',
+  'wB',
+  'wR',
+  'wQ',
+  'wK',
+  'bP',
+  'bN',
+  'bB',
+  'bR',
+  'bQ',
+  'bK',
+];
+
 function StaticBoard({ puzzle }: { puzzle: Puzzle }) {
   const fen = puzzle.FEN;
   const side = fen.split(' ')[1] === 'w' ? 'b' : 'w';
-  const game = new Chess(fen);
-  game.move(puzzle.Moves.split(' ')[0]);
+  const game = useMemo(() => {
+    const position = new Chess(fen);
+    position.move(puzzle.Moves.split(' ')[0]);
+    return position;
+  }, [fen, puzzle.Moves]);
   const lastMoveHighlight = useMemo(() => {
     // get last move from game
     const lastMove = game.history({ verbose: true }).pop();
@@ -44,22 +62,7 @@ function StaticBoard({ puzzle }: { puzzle: Puzzle }) {
       }
     }
     return {};
-  }, [game]);
-
-  const pieces: Piece[] = [
-    'wP',
-    'wN',
-    'wB',
-    'wR',
-    'wQ',
-    'wK',
-    'bP',
-    'bN',
-    'bB',
-    'bR',
-    'bQ',
-    'bK',
-  ];
+  }, [game, side]);
 
   function onSquareRightClick(square: Square) {
     if (square in rightClickedSquares) {
@@ -90,7 +93,7 @@ function StaticBoard({ puzzle }: { puzzle: Puzzle }) {
     return pieceComponents;
   }, []);
 
-  function onSquareClick(square: Square) {
+  function onSquareClick(_square: Square) {
     setRightClickedSquares({});
   }
 

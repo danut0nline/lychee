@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export default function useTimer(): [number, () => void, () => void] {
   const [time, setTime] = useState(0);
@@ -39,13 +39,13 @@ export default function useTimer(): [number, () => void, () => void] {
     setPaused(true);
   };
 
-  const stop = () => {
+  const stop = useCallback(() => {
     setActive(false);
-  };
+  }, []);
 
-  const start = () => {
+  const start = useCallback(() => {
     setTime(0);
     setActive(true);
-  };
+  }, []);
   return [time, start, stop];
 }

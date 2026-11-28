@@ -72,17 +72,16 @@ const ControlButtonBar = () => {
     PlaybackControllerContext
   );
 
-  // EVENT EMITTERS
-  const handleKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'ArrowLeft') {
-      if (event.shiftKey) firstMove();
-      else prevMove();
-    } else if (event.key === 'ArrowRight') {
-      if (event.shiftKey) lastMove();
-      else nextMove();
-    }
-  };
   useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowLeft') {
+        if (event.shiftKey) firstMove();
+        else prevMove();
+      } else if (event.key === 'ArrowRight') {
+        if (event.shiftKey) lastMove();
+        else nextMove();
+      }
+    };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [firstMove, prevMove, nextMove, lastMove]);
