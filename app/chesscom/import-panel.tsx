@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import PreparePositionsButton from './prepare-positions-button';
+import AnalysisControls from './analysis-controls';
 
 type ImportJobSummary = {
   id: string;
@@ -163,6 +164,13 @@ export default function ChesscomImportPanel({ username, initialJobs }: Props) {
                       onPrepared={() => refreshJob(job.id)}
                     />
                   )}
+                  <AnalysisControls
+                    jobId={job.id}
+                    totalPositions={job.totalPositions}
+                    analysisStatus={job.analysisStatus}
+                    failureCount={job.failureCount}
+                    onUpdated={() => refreshJob(job.id)}
+                  />
                 </div>
               </li>
             ))}
