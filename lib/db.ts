@@ -30,7 +30,8 @@ export const db = drizzle(client, { schema });
 const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY NOT NULL,
-    username TEXT NOT NULL UNIQUE
+    username TEXT NOT NULL UNIQUE,
+    chesscom_username TEXT
   )`,
   `CREATE TABLE IF NOT EXISTS auth_sessions (
     token_hash TEXT PRIMARY KEY NOT NULL,
@@ -130,6 +131,131 @@ const schemaStatements = [
     PRIMARY KEY (puzzle_id, theme)
   )`,
   'CREATE INDEX IF NOT EXISTS puzzle_themes_theme_idx ON puzzle_themes(theme, puzzle_id)',
+  `CREATE TABLE IF NOT EXISTS chesscom_import_jobs (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    source_username TEXT NOT NULL,
+    status TEXT NOT NULL,
+    analysis_status TEXT NOT NULL DEFAULT 'idle',
+    window_start INTEGER NOT NULL,
+    window_end INTEGER NOT NULL,
+    total_games INTEGER NOT NULL DEFAULT 0,
+    imported_games INTEGER NOT NULL DEFAULT 0,
+    total_positions INTEGER NOT NULL DEFAULT 0,
+    processed_positions INTEGER NOT NULL DEFAULT 0,
+    candidate_count INTEGER NOT NULL DEFAULT 0,
+    skipped_count INTEGER NOT NULL DEFAULT 0,
+    failure_count INTEGER NOT NULL DEFAULT 0,
+    checkpoint TEXT,
+    error TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  'CREATE UNIQUE INDEX IF NOT EXISTS chesscom_import_jobs_user_id_unique ON chesscom_import_jobs(user_id, id)',
+  'CREATE INDEX IF NOT EXISTS chesscom_import_jobs_user_created_idx ON chesscom_import_jobs(user_id, created_at)',
+  `CREATE TABLE IF NOT EXISTS chesscom_games (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    source_username TEXT NOT NULL,
+    source_url TEXT NOT NULL,
+    played_at INTEGER NOT NULL,
+    white_username TEXT NOT NULL,
+    black_username TEXT NOT NULL,
+    white_rating INTEGER,
+    black_rating INTEGER,
+    time_class TEXT,
+    rules TEXT NOT NULL,
+    result TEXT NOT NULL,
+    pgn TEXT NOT NULL,
+    analysis_status TEXT NOT NULL DEFAULT 'pending',
+    skip_reason TEXT,
+    created_at INTEGER NOT NULL
+  )`,
+  'CREATE UNIQUE INDEX IF NOT EXISTS chesscom_games_user_id_unique ON chesscom_games(user_id, id)',
+  'CREATE UNIQUE INDEX IF NOT EXISTS chesscom_games_user_source_url_unique ON chesscom_games(user_id, source_url)',
+  'CREATE INDEX IF NOT EXISTS chesscom_games_user_played_at_idx ON chesscom_games(user_id, played_at)',
+  `CREATE TABLE IF NOT EXISTS chesscom_import_job_games (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id TEXT NOT NULL,
+    game_id TEXT NOT NULL,
+    PRIMARY KEY (user_id, job_id, game_id),
+    FOREIGN KEY (user_id, job_id)
+      REFERENCES chesscom_import_jobs(user_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id, game_id)
+      REFERENCES chesscom_games(user_id, id) ON DELETE CASCADE
+  )`,
+  'CREATE INDEX IF NOT EXISTS chesscom_import_job_games_user_job_idx ON chesscom_import_job_games(user_id, job_id)',
+  `CREATE TABLE IF NOT EXISTS chesscom_analysis_positions (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    game_id TEXT NOT NULL,
+    ply INTEGER NOT NULL,
+    fen TEXT NOT NULL,
+    played_move TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    best_move TEXT,
+    best_score TEXT,
+    played_score TEXT,
+    loss_centipawns INTEGER,
+    error TEXT,
+    processed_at INTEGER,
+    FOREIGN KEY (user_id, game_id)
+      REFERENCES chesscom_games(user_id, id) ON DELETE CASCADE
+  )`,
+  'CREATE UNIQUE INDEX IF NOT EXISTS chesscom_analysis_game_ply_unique ON chesscom_analysis_positions(game_id, ply)',
+  'CREATE INDEX IF NOT EXISTS chesscom_analysis_user_status_idx ON chesscom_analysis_positions(user_id, status)',
+  `CREATE TABLE IF NOT EXISTS chesscom_puzzles (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    game_id TEXT NOT NULL,
+    source_game_url TEXT NOT NULL,
+    ply INTEGER NOT NULL,
+    fen TEXT NOT NULL,
+    solution_line TEXT NOT NULL,
+    estimated_rating INTEGER NOT NULL,
+    stockfish_version TEXT NOT NULL,
+    analysis_settings TEXT NOT NULL,
+    score_loss TEXT NOT NULL,
+    rating_formula_version TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id, game_id)
+      REFERENCES chesscom_games(user_id, id) ON DELETE CASCADE
+  )`,
+  'CREATE UNIQUE INDEX IF NOT EXISTS chesscom_puzzles_user_id_unique ON chesscom_puzzles(user_id, id)',
+  'CREATE UNIQUE INDEX IF NOT EXISTS chesscom_puzzles_user_source_ply_unique ON chesscom_puzzles(user_id, source_game_url, ply)',
+  'CREATE INDEX IF NOT EXISTS chesscom_puzzles_user_rating_idx ON chesscom_puzzles(user_id, estimated_rating)',
+  `CREATE TABLE IF NOT EXISTS chesscom_puzzle_progress (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    puzzle_id TEXT NOT NULL,
+    solve_order INTEGER NOT NULL,
+    solved INTEGER NOT NULL DEFAULT 0,
+    last_result INTEGER,
+    review_due_at INTEGER,
+    review_state TEXT NOT NULL DEFAULT 'new',
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, puzzle_id),
+    FOREIGN KEY (user_id, puzzle_id)
+      REFERENCES chesscom_puzzles(user_id, id) ON DELETE CASCADE
+  )`,
+  'CREATE UNIQUE INDEX IF NOT EXISTS chesscom_puzzle_progress_order_unique ON chesscom_puzzle_progress(user_id, solve_order)',
+  'CREATE INDEX IF NOT EXISTS chesscom_puzzle_progress_review_idx ON chesscom_puzzle_progress(user_id, review_due_at)',
+  `CREATE TABLE IF NOT EXISTS chesscom_ratings (
+    user_id TEXT PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    rating REAL NOT NULL,
+    rating_deviation REAL NOT NULL,
+    volatility REAL NOT NULL,
+    number_of_results INTEGER NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS chesscom_rating_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    rating REAL NOT NULL,
+    rating_deviation REAL NOT NULL,
+    volatility REAL NOT NULL,
+    number_of_results INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  )`,
+  'CREATE INDEX IF NOT EXISTS chesscom_rating_history_user_time_idx ON chesscom_rating_history(user_id, created_at)',
 ];
 
 declare global {
@@ -156,6 +282,44 @@ export async function dbConnect(): Promise<void> {
       await client.execute(
         'CREATE UNIQUE INDEX IF NOT EXISTS rating_history_source_id_unique ON rating_history(source_id)'
       );
+      const chesscomGameColumns = await client.execute(
+        'PRAGMA table_info(chesscom_games)'
+      );
+      if (
+        chesscomGameColumns.rows.some(
+          (column) => column.name === 'import_job_id'
+        )
+      ) {
+        await client.execute(
+          `INSERT OR IGNORE INTO chesscom_import_job_games (user_id, job_id, game_id)
+           SELECT games.user_id, games.import_job_id, games.id
+           FROM chesscom_games AS games
+           INNER JOIN chesscom_import_jobs AS jobs
+             ON jobs.user_id = games.user_id
+            AND jobs.id = games.import_job_id
+           WHERE games.import_job_id IS NOT NULL`
+        );
+      }
+      const userColumns = await client.execute('PRAGMA table_info(users)');
+      if (
+        !userColumns.rows.some((column) => column.name === 'chesscom_username')
+      ) {
+        await client.execute(
+          'ALTER TABLE users ADD COLUMN chesscom_username TEXT'
+        );
+      }
+      const importJobColumns = await client.execute(
+        'PRAGMA table_info(chesscom_import_jobs)'
+      );
+      if (
+        !importJobColumns.rows.some(
+          (column) => column.name === 'analysis_status'
+        )
+      ) {
+        await client.execute(
+          "ALTER TABLE chesscom_import_jobs ADD COLUMN analysis_status TEXT NOT NULL DEFAULT 'idle'"
+        );
+      }
     })().catch((error) => {
       globalThis.__lycheeSchemaPromise = undefined;
       throw error;

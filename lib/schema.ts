@@ -1,15 +1,18 @@
 import {
+  foreignKey,
   index,
   integer,
   primaryKey,
   real,
   sqliteTable,
   text,
+  uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   username: text('username').notNull().unique(),
+  chesscomUsername: text('chesscom_username'),
 });
 
 export const sessions = sqliteTable(
@@ -171,6 +174,236 @@ export const puzzleThemes = sqliteTable(
   ]
 );
 
+export const chesscomImportJobs = sqliteTable(
+  'chesscom_import_jobs',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    sourceUsername: text('source_username').notNull(),
+    status: text('status').notNull(),
+    analysisStatus: text('analysis_status').notNull().default('idle'),
+    windowStart: integer('window_start').notNull(),
+    windowEnd: integer('window_end').notNull(),
+    totalGames: integer('total_games').notNull().default(0),
+    importedGames: integer('imported_games').notNull().default(0),
+    totalPositions: integer('total_positions').notNull().default(0),
+    processedPositions: integer('processed_positions').notNull().default(0),
+    candidateCount: integer('candidate_count').notNull().default(0),
+    skippedCount: integer('skipped_count').notNull().default(0),
+    failureCount: integer('failure_count').notNull().default(0),
+    checkpoint: text('checkpoint'),
+    error: text('error'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('chesscom_import_jobs_user_id_unique').on(
+      table.userId,
+      table.id
+    ),
+    index('chesscom_import_jobs_user_created_idx').on(
+      table.userId,
+      table.createdAt
+    ),
+  ]
+);
+
+export const chesscomGames = sqliteTable(
+  'chesscom_games',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    sourceUsername: text('source_username').notNull(),
+    sourceUrl: text('source_url').notNull(),
+    playedAt: integer('played_at').notNull(),
+    whiteUsername: text('white_username').notNull(),
+    blackUsername: text('black_username').notNull(),
+    whiteRating: integer('white_rating'),
+    blackRating: integer('black_rating'),
+    timeClass: text('time_class'),
+    rules: text('rules').notNull(),
+    result: text('result').notNull(),
+    pgn: text('pgn').notNull(),
+    analysisStatus: text('analysis_status').notNull().default('pending'),
+    skipReason: text('skip_reason'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('chesscom_games_user_id_unique').on(table.userId, table.id),
+    uniqueIndex('chesscom_games_user_source_url_unique').on(
+      table.userId,
+      table.sourceUrl
+    ),
+    index('chesscom_games_user_played_at_idx').on(table.userId, table.playedAt),
+  ]
+);
+
+export const chesscomImportJobGames = sqliteTable(
+  'chesscom_import_job_games',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    jobId: text('job_id').notNull(),
+    gameId: text('game_id').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.jobId, table.gameId] }),
+    foreignKey({
+      columns: [table.userId, table.jobId],
+      foreignColumns: [chesscomImportJobs.userId, chesscomImportJobs.id],
+      name: 'chesscom_import_job_games_user_job_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.userId, table.gameId],
+      foreignColumns: [chesscomGames.userId, chesscomGames.id],
+      name: 'chesscom_import_job_games_user_game_fk',
+    }).onDelete('cascade'),
+    index('chesscom_import_job_games_user_job_idx').on(
+      table.userId,
+      table.jobId
+    ),
+  ]
+);
+
+export const chesscomAnalysisPositions = sqliteTable(
+  'chesscom_analysis_positions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    gameId: text('game_id').notNull(),
+    ply: integer('ply').notNull(),
+    fen: text('fen').notNull(),
+    playedMove: text('played_move').notNull(),
+    status: text('status').notNull().default('pending'),
+    bestMove: text('best_move'),
+    bestScore: text('best_score'),
+    playedScore: text('played_score'),
+    lossCentipawns: integer('loss_centipawns'),
+    error: text('error'),
+    processedAt: integer('processed_at'),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.userId, table.gameId],
+      foreignColumns: [chesscomGames.userId, chesscomGames.id],
+      name: 'chesscom_analysis_user_game_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('chesscom_analysis_game_ply_unique').on(
+      table.gameId,
+      table.ply
+    ),
+    index('chesscom_analysis_user_status_idx').on(table.userId, table.status),
+  ]
+);
+
+export const chesscomPuzzles = sqliteTable(
+  'chesscom_puzzles',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    gameId: text('game_id').notNull(),
+    sourceGameUrl: text('source_game_url').notNull(),
+    ply: integer('ply').notNull(),
+    fen: text('fen').notNull(),
+    solutionLine: text('solution_line').notNull(),
+    estimatedRating: integer('estimated_rating').notNull(),
+    stockfishVersion: text('stockfish_version').notNull(),
+    analysisSettings: text('analysis_settings').notNull(),
+    scoreLoss: text('score_loss').notNull(),
+    ratingFormulaVersion: text('rating_formula_version').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('chesscom_puzzles_user_id_unique').on(table.userId, table.id),
+    foreignKey({
+      columns: [table.userId, table.gameId],
+      foreignColumns: [chesscomGames.userId, chesscomGames.id],
+      name: 'chesscom_puzzles_user_game_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('chesscom_puzzles_user_source_ply_unique').on(
+      table.userId,
+      table.sourceGameUrl,
+      table.ply
+    ),
+    index('chesscom_puzzles_user_rating_idx').on(
+      table.userId,
+      table.estimatedRating
+    ),
+  ]
+);
+
+export const chesscomPuzzleProgress = sqliteTable(
+  'chesscom_puzzle_progress',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    puzzleId: text('puzzle_id').notNull(),
+    solveOrder: integer('solve_order').notNull(),
+    solved: integer('solved').notNull().default(0),
+    lastResult: integer('last_result'),
+    reviewDueAt: integer('review_due_at'),
+    reviewState: text('review_state').notNull().default('new'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.puzzleId] }),
+    foreignKey({
+      columns: [table.userId, table.puzzleId],
+      foreignColumns: [chesscomPuzzles.userId, chesscomPuzzles.id],
+      name: 'chesscom_progress_user_puzzle_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('chesscom_puzzle_progress_order_unique').on(
+      table.userId,
+      table.solveOrder
+    ),
+    index('chesscom_puzzle_progress_review_idx').on(
+      table.userId,
+      table.reviewDueAt
+    ),
+  ]
+);
+
+export const chesscomRatings = sqliteTable('chesscom_ratings', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  rating: real('rating').notNull(),
+  ratingDeviation: real('rating_deviation').notNull(),
+  volatility: real('volatility').notNull(),
+  numberOfResults: integer('number_of_results').notNull(),
+});
+
+export const chesscomRatingHistory = sqliteTable(
+  'chesscom_rating_history',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    rating: real('rating').notNull(),
+    ratingDeviation: real('rating_deviation').notNull(),
+    volatility: real('volatility').notNull(),
+    numberOfResults: integer('number_of_results').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (table) => [
+    index('chesscom_rating_history_user_time_idx').on(
+      table.userId,
+      table.createdAt
+    ),
+  ]
+);
+
 export const schema = {
   users,
   sessions,
@@ -187,4 +420,12 @@ export const schema = {
   similarityCaches,
   puzzles,
   puzzleThemes,
+  chesscomImportJobs,
+  chesscomGames,
+  chesscomImportJobGames,
+  chesscomAnalysisPositions,
+  chesscomPuzzles,
+  chesscomPuzzleProgress,
+  chesscomRatings,
+  chesscomRatingHistory,
 };

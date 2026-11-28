@@ -74,7 +74,7 @@ describe('SQL data store', () => {
       RatingDeviation: 80,
       Popularity: 50,
       NbPlays: 100,
-      Themes: 'mateIn2',
+      Themes: `store-test-theme-${suffix}`,
       GameUrl: 'https://lichess.org/training/test',
       hierarchy_tags: 'mate mateIn2',
     };
@@ -98,21 +98,31 @@ describe('SQL data store', () => {
         },
         {
           sql: 'INSERT INTO puzzle_themes (puzzle_id, theme) VALUES (?, ?)',
-          args: [puzzleId, 'matein2'],
+          args: [puzzleId, `store-test-theme-${suffix}`],
         },
       ],
       'write'
     );
 
-    expect(await findPuzzleForRating(username, 'MATEIN2', 1500, 1700)).toEqual(
-      puzzle
-    );
+    expect(
+      await findPuzzleForRating(
+        username,
+        `STORE-TEST-THEME-${suffix}`,
+        1500,
+        1700
+      )
+    ).toEqual(puzzle);
 
     await addSolvedPuzzle(username, puzzleId);
     await addSolvedPuzzle(username, puzzleId);
     expect(await getSolvedPuzzleIds(username)).toEqual([puzzleId]);
     expect(
-      await findPuzzleForRating(username, 'mateIn2', 1500, 1700)
+      await findPuzzleForRating(
+        username,
+        `store-test-theme-${suffix}`,
+        1500,
+        1700
+      )
     ).toBeUndefined();
 
     await replaceSolvedPuzzleIds(username, [`second-${suffix}`, puzzleId]);
