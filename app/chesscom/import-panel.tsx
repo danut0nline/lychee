@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import PreparePositionsButton from './prepare-positions-button';
 
 type ImportJobSummary = {
   id: string;
@@ -155,6 +156,12 @@ export default function ChesscomImportPanel({ username, initialJobs }: Props) {
                     >
                       Resume import
                     </Button>
+                  )}
+                  {['completed', 'partial', 'paused'].includes(job.status) && (
+                    <PreparePositionsButton
+                      jobId={job.id}
+                      onPrepared={() => refreshJob(job.id)}
+                    />
                   )}
                 </div>
               </li>
