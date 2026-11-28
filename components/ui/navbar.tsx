@@ -43,6 +43,26 @@ export default function Navbar({ user }: NavbarProps) {
               </Button>
             </Link>
           </div>
+          <div className='text-sm underline font-mono block sm:hidden'>
+            <Link href='/settings'>
+              <Button
+                className='flex-row p-2 font-mono w-full underline'
+                variant='ghost'
+              >
+                Settings
+              </Button>
+            </Link>
+          </div>
+          <div className='text-sm underline font-mono block sm:hidden'>
+            <Link href='/chesscom'>
+              <Button
+                className='flex-row p-2 font-mono w-full underline'
+                variant='ghost'
+              >
+                My games
+              </Button>
+            </Link>
+          </div>
         </>
       )}
 
@@ -65,6 +85,26 @@ export default function Navbar({ user }: NavbarProps) {
                   variant='ghost'
                 >
                   Trainer
+                </Button>
+              </Link>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item className='bg-background w-full'>
+              <Link href='/chesscom'>
+                <Button
+                  className='flex-row p-2 font-mono w-full'
+                  variant='ghost'
+                >
+                  My games
+                </Button>
+              </Link>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item className='bg-background w-full'>
+              <Link href='/settings'>
+                <Button
+                  className='flex-row p-2 font-mono w-full'
+                  variant='ghost'
+                >
+                  Settings
                 </Button>
               </Link>
             </DropdownMenu.Item>
