@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import PreparePositionsButton from './prepare-positions-button';
 import AnalysisControls from './analysis-controls';
+import DeleteGameDataButton from './delete-game-data-button';
 
 type ImportJobSummary = {
   id: string;
@@ -182,6 +183,7 @@ export default function ChesscomImportPanel({ username, initialJobs }: Props) {
           </ul>
         )}
       </div>
+      {jobs.length > 0 && <DeleteGameDataButton onDeleted={() => setJobs([])} />}
     </section>
   );
 }
