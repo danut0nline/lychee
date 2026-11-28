@@ -64,6 +64,20 @@ export default async function DashboardWrapper({ user }: { user: User }) {
           </CardContent>
         </Card>
 
+        <Link href='/chesscom/puzzles'>
+          <Card className='hover:bg-muted/30'>
+            <CardContent className='flex items-center justify-between gap-4 p-6'>
+              <div>
+                <h2 className='text-xl font-semibold'>User games puzzles</h2>
+                <p className='text-sm text-muted-foreground'>
+                  Practice private puzzles generated from your Chess.com games.
+                </p>
+              </div>
+              <Badge variant='outline'>Separate rating</Badge>
+            </CardContent>
+          </Card>
+        </Link>
+
         {groups.length > 0 && (
           <div>
             <p className='font-bold mb-2 tracking-tighest text-secondary-foreground'>

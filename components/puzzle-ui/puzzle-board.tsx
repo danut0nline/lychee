@@ -1,7 +1,7 @@
 'use client';
 
 import { Chess, Move, Square } from 'chess.js';
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { PuzzleContext } from './puzzle-mode';
 import LoadingBoard from './loading-board';
 import React from 'react';
@@ -17,12 +17,15 @@ import DisplayBox from './controls/display-box';
 import useTimer from '@/hooks/useTimer';
 import { Rating } from '@/src/rating/getRating';
 import PuzzleHintBox from './controls/puzzle-hint';
+import Link from 'next/link';
 
 interface PuzzleBoardProps {
   puzzle?: Puzzle;
   initialRating: Rating;
   loading: boolean;
   similar?: Puzzle[];
+  playerMovesFirst?: boolean;
+  sourceGameUrl?: string;
 }
 // set its props to be the puzzle object
 const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
@@ -30,11 +33,14 @@ const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
   initialRating,
   loading,
   similar,
+  playerMovesFirst = false,
+  sourceGameUrl,
 }) => {
   const { submitNextPuzzle: submitPuzzle, getNextPuzzle } =
     useContext(PuzzleContext);
-  const line = puzzle?.Moves.split(' ') ?? [];
-  const side = puzzle?.FEN.split(' ')[1] === 'w' ? 'b' : 'w';
+  const line = useMemo(() => puzzle?.Moves.split(' ') ?? [], [puzzle?.Moves]);
+  const sideToMove = puzzle?.FEN.split(' ')[1] === 'w' ? 'w' : 'b';
+  const side = playerMovesFirst ? sideToMove : sideToMove === 'w' ? 'b' : 'w';
 
   // game state
   const game = useMemo(() => new Chess(puzzle?.FEN), [puzzle]);
@@ -61,10 +67,11 @@ const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
   // calculated modes
   const playbackMode = playbackPos !== linePos || solved;
   const inPlay = rendered && !playbackMode && !solved;
-  const interactive = inPlay && linePos % 2 === 1;
+  const interactive =
+    inPlay && (playerMovesFirst ? linePos % 2 === 0 : linePos % 2 === 1);
 
   /** OVERALL RESET */
-  const loadPuzzle = () => {
+  useEffect(() => {
     if (puzzle) game.load(puzzle.FEN);
     setSolved(false);
     if (puzzle) setFens([puzzle.FEN]);
@@ -75,45 +82,30 @@ const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
     setWrong(false);
     setLastMoveWrong(false);
     setGaveUp(false);
-  };
-
-  useEffect(() => {
-    loadPuzzle();
-  }, [puzzle]);
+  }, [game, puzzle, startTimer]);
 
   // memoized functions for playback
   // playback
-  const firstMove = useMemo(() => () => setPlaybackPos(0), [setPlaybackPos]);
-  const lastMove = useMemo(
-    () => () => setPlaybackPos(linePos),
-    [setPlaybackPos, linePos]
+  const firstMove = useCallback(() => setPlaybackPos(0), []);
+  const lastMove = useCallback(() => setPlaybackPos(linePos), [linePos]);
+  const nextMove = useCallback(
+    () => setPlaybackPos((pos) => Math.min(linePos, pos + 1)),
+    [linePos]
   );
-  const nextMove = useMemo(
-    () => () => setPlaybackPos((pos) => Math.min(linePos, pos + 1)),
-    [setPlaybackPos, linePos, playbackPos]
-  );
-  const prevMove = useMemo(
-    () => () => setPlaybackPos((pos) => Math.max(0, pos - 1)),
-    [setPlaybackPos, playbackPos]
+  const prevMove = useCallback(
+    () => setPlaybackPos((pos) => Math.max(0, pos - 1)),
+    []
   );
 
   /** PLAYBACK MODE */
   useEffect(() => {
     if (playbackMode) setFen(fens[playbackPos]);
     else setFen(game.fen());
-  }, [playbackMode, playbackPos, fens, linePos]);
+  }, [playbackMode, playbackPos, fens, linePos, game]);
 
   // MOVEMENT
-  // try the bot's first move after rendering
-  useEffect(() => {
-    if (rendered && linePos === 0) {
-      const timeout = setTimeout(botMove, 400);
-      return () => clearTimeout(timeout);
-    }
-  }, [linePos, rendered]);
-
   // bot move
-  function botMove() {
+  const botMove = useCallback(() => {
     if (inPlay && linePos < line.length) {
       game.move(line[linePos]);
       setFen(game.fen());
@@ -122,7 +114,15 @@ const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
       setLinePos((prev) => prev + 1);
       setPlaybackPos((prev) => prev + 1);
     }
-  }
+  }, [game, inPlay, line, linePos]);
+
+  // Try the bot's first move after rendering, unless the player moves first.
+  useEffect(() => {
+    if (rendered && linePos === 0 && !playerMovesFirst) {
+      const timeout = setTimeout(botMove, 400);
+      return () => clearTimeout(timeout);
+    }
+  }, [botMove, linePos, playerMovesFirst, rendered]);
 
   const playerMoveCallback = (from: Square, to: Square, promotion?: string) => {
     game.move({ from: from, to: to, promotion: promotion });
@@ -134,7 +134,7 @@ const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
   };
 
   /** HANDLE PLAYER MOVE VERIFICATION */
-  function undoWrongMove() {
+  const undoWrongMove = useCallback(() => {
     if (submitPuzzle && !wrong) {
       submitPuzzle(false, 0).then((r) => setRating(r));
       setWrong(true);
@@ -145,36 +145,46 @@ const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
     setFens((prev) => prev.slice(0, -1));
     setLinePos((prev) => prev - 1);
     setPlaybackPos((prev) => prev - 1);
-  }
+  }, [game, submitPuzzle, wrong]);
 
   // player moved correctly
-  function correctMove() {
+  const correctMove = useCallback(() => {
     const timeout = setTimeout(botMove, 300); // start up the bot's move
     return () => clearTimeout(timeout);
-  }
+  }, [botMove]);
 
   // player finished puzzle
-  function finishedGame() {
+  const finishedGame = useCallback(() => {
     stopTimer();
     if (submitPuzzle && !wrong) {
       const elapsed = time;
       submitPuzzle(true, elapsed).then((r) => setRating(r));
     }
     setSolved(true);
-  }
+  }, [stopTimer, submitPuzzle, wrong, time]);
 
   useEffect(() => {
     if (inPlay && !interactive && linePos > 0) {
       if (
         !game.isCheckmate() &&
         game.history({ verbose: true }).pop()?.lan !== line[linePos - 1]
-      )
-        setTimeout(undoWrongMove, 300);
-      else if (linePos >= line.length) finishedGame();
-      else return correctMove(); // there's a timeout here so we should return it
-      return;
+      ) {
+        const timeout = setTimeout(undoWrongMove, 300);
+        return () => clearTimeout(timeout);
+      } else if (linePos >= line.length) {
+        finishedGame();
+      } else return correctMove(); // there's a timeout here so we should return it
     }
-  }, [linePos]);
+  }, [
+    correctMove,
+    finishedGame,
+    game,
+    inPlay,
+    interactive,
+    line,
+    linePos,
+    undoWrongMove,
+  ]);
 
   if (!puzzle) return <LoadingBoard />;
 
@@ -259,6 +269,18 @@ const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
                 )}
               </div>
             </div>
+            {solved && sourceGameUrl && (
+              <p className='pt-2 text-center text-sm'>
+                <Link
+                  href={sourceGameUrl}
+                  target='_blank'
+                  rel='noreferrer'
+                  className='underline underline-offset-4'
+                >
+                  View source game on Chess.com
+                </Link>
+              </p>
+            )}
             <MoveNavigationContext.Provider
               value={{ currentIndex: playbackPos, moves: game.history(), side }}
             >
@@ -281,7 +303,12 @@ const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
               viewSolution={viewSolution}
             />
           </div>
-          <PuzzleHintBox similar={similar} puzzle={puzzle} solved={solved} />
+          <PuzzleHintBox
+            similar={similar}
+            puzzle={puzzle}
+            solved={solved}
+            showLichessAnalysis={!playerMovesFirst}
+          />
         </div>
       </div>
     </div>

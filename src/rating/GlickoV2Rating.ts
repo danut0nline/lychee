@@ -1,12 +1,11 @@
-import { DEFAULT_RATING } from './getRating';
-
 const MULTIPLIER: number = 173.7178;
+const RATING_SCALE_CENTER = 1500;
 
 const convertRatingToOriginalGlickoScale = (r: number): number =>
-  r * MULTIPLIER + DEFAULT_RATING.rating;
+  r * MULTIPLIER + RATING_SCALE_CENTER;
 
 const convertRatingToGlicko2Scale = (r: number): number =>
-  (r - DEFAULT_RATING.rating) / MULTIPLIER;
+  (r - RATING_SCALE_CENTER) / MULTIPLIER;
 
 const convertRatingDeviationToOriginalGlickoScale = (r: number): number =>
   r * MULTIPLIER;

@@ -63,6 +63,16 @@ export default function Navbar({ user }: NavbarProps) {
               </Button>
             </Link>
           </div>
+          <div className='text-sm underline font-mono block sm:hidden'>
+            <Link href='/chesscom/puzzles'>
+              <Button
+                className='flex-row p-2 font-mono w-full underline'
+                variant='ghost'
+              >
+                Game puzzles
+              </Button>
+            </Link>
+          </div>
         </>
       )}
 
@@ -95,6 +105,16 @@ export default function Navbar({ user }: NavbarProps) {
                   variant='ghost'
                 >
                   My games
+                </Button>
+              </Link>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item className='bg-background w-full'>
+              <Link href='/chesscom/puzzles'>
+                <Button
+                  className='flex-row p-2 font-mono w-full'
+                  variant='ghost'
+                >
+                  Game puzzles
                 </Button>
               </Link>
             </DropdownMenu.Item>

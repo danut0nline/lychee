@@ -103,6 +103,11 @@ export default function ChesscomImportPanel({ username, initialJobs }: Props) {
       </div>
       {username ? (
         <>
+          <Link href='/chesscom/puzzles'>
+            <Button type='button' variant='outline'>
+              Practice user games puzzles
+            </Button>
+          </Link>
           <Button type='button' onClick={startImport} disabled={starting}>
             {starting ? 'Importing…' : 'Import recent games'}
           </Button>

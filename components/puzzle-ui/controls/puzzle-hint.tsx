@@ -71,10 +71,12 @@ const PuzzleHintBox = ({
   similar,
   puzzle,
   solved,
+  showLichessAnalysis = true,
 }: {
   similar?: Puzzle[];
   puzzle: Puzzle;
   solved: boolean;
+  showLichessAnalysis?: boolean;
 }) => {
   const mode = () => {
     if (solved) {
@@ -94,7 +96,7 @@ const PuzzleHintBox = ({
   return (
     <>
       <div className='bg-controller rounded-lg p-2 pl-4'>{mode()}</div>
-      {solved && (
+      {solved && showLichessAnalysis && (
         <Button
           size='sm'
           variant={'secondary'}

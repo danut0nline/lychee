@@ -1,7 +1,16 @@
 import { Puzzle } from '@/types/lichess-api';
 import GameResult from './GameResult';
 import GlickoRating from './GlickoV2Rating';
-import { Rating, getPuzzleRating } from './getRating';
+import type { Rating } from './getRating';
+
+const DEFAULT_PUZZLE_VOLATILITY = 0.09;
+
+const getPuzzleRating = (puzzle: Puzzle): Rating => ({
+  rating: puzzle.Rating,
+  ratingDeviation: puzzle.RatingDeviation,
+  volatility: DEFAULT_PUZZLE_VOLATILITY,
+  numberOfResults: puzzle.NbPlays,
+});
 
 const REVIEW_SCALING_FACTOR = 0.7;
 
